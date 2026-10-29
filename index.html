@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Screening Question Bank</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+[hidden] { display: none !important; }
+/* Layout: one centered column — header, composer, sort bar, ranked list of points with a vote rail on the left */
+:root {
+  --bg: #f5f6f9;
+  --surface: #ffffff;
+  --ink: #18202e;
+  --muted: #5d6677;
+  --line: #dde1ea;
+  --accent: #3550c7;
+  --accent-soft: #e6eafb;
+  --up: #1f8a5b;
+  --up-soft: #e2f3ea;
+  --down: #c2412f;
+  --down-soft: #fbe7e3;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151c; --surface: #1a1f29; --ink: #e7eaf1; --muted: #9aa3b4; --line: #2b3240;
+    --accent: #8ea2ff; --accent-soft: #232b48; --up: #5fcf98; --up-soft: #183326;
+    --down: #ff8a75; --down-soft: #3a211d; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151c; --surface: #1a1f29; --ink: #e7eaf1; --muted: #9aa3b4; --line: #2b3240;
+  --accent: #8ea2ff; --accent-soft: #232b48; --up: #5fcf98; --up-soft: #183326;
+  --down: #ff8a75; --down-soft: #3a211d; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+}
+.wrap {
+  max-width: 720px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+header { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+h1 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 5vw, 34px);
+  line-height: 1.15; margin: 0; text-wrap: balance;
+}
+.prompt { margin: 0; color: var(--muted); max-width: 60ch; }
+ul.prompt { padding-left: 1.2em; display: flex; flex-direction: column; gap: 2px; }
+.edit-box { display: flex; flex-direction: column; gap: 8px; }
+.edit-actions { display: flex; gap: 8px; }
+.edit-actions .btn { padding: 6px 12px; font-size: 13px; }
+.title-edit { display: flex; flex-direction: column; gap: 8px; }
+.title-edit input, .title-edit textarea { font: inherit; }
+.edit-link {
+  align-self: flex-start; background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--accent); font: 500 13px var(--font-body);
+}
+.notice {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 10px;
+  padding: 12px 14px; color: var(--muted); font-size: 14px;
+}
+.composer {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px;
+}
+textarea, input[type="text"] {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink); padding: 10px 12px;
+  font: 15px/1.45 var(--font-body); resize: vertical;
+}
+textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.composer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.btn {
+  border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+  font: 600 14px var(--font-body); background: var(--accent); color: var(--surface);
+}
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.btn:focus-visible, .vote:focus-visible, .tab:focus-visible, .edit-link:focus-visible, .del:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; padding: 3px; background: var(--surface); }
+.tab {
+  border: 0; background: none; color: var(--muted); cursor: pointer;
+  font: 500 13px var(--font-body); padding: 6px 12px; border-radius: 6px;
+}
+.tab[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.stats { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+ol.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.item {
+  display: grid; grid-template-columns: 52px 1fr; gap: 12px; align-items: start;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 12px 8px;
+}
+.rail { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.vote {
+  width: 36px; height: 30px; border-radius: 8px; border: 1px solid transparent;
+  background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center;
+}
+.vote svg { width: 16px; height: 16px; fill: currentColor; }
+.vote:hover:not(:disabled) { border-color: var(--line); }
+.vote.up[aria-pressed="true"] { background: var(--up-soft); color: var(--up); }
+.vote.down[aria-pressed="true"] { background: var(--down-soft); color: var(--down); }
+.vote:disabled { cursor: default; opacity: .5; }
+.score {
+  font-family: var(--font-mono); font-size: 15px; font-weight: 500;
+  font-variant-numeric: tabular-nums; min-width: 2ch; text-align: center;
+}
+.score.pos { color: var(--up); } .score.neg { color: var(--down); }
+.body { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+.text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tally .u { color: var(--up); } .tally .d { color: var(--down); }
+.del { background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted); font: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.del:hover { color: var(--down); }
+.empty {
+  border: 1px dashed var(--line); border-radius: 12px; padding: 28px 20px;
+  text-align: center; color: var(--muted);
+}
+.empty strong { display: block; color: var(--ink); font-family: var(--font-display); font-size: 18px; margin-bottom: 4px; }
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 8px; font-size: 13px;
+  max-width: calc(100% - 32px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .item { transition: border-color .15s; }
+  .vote { transition: background .12s, color .12s; }
+}
+.name-row { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; }
+.name-row input { max-width: 220px; padding: 7px 10px; font-size: 14px; }
+.composer-row .count:not(label) { margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Interview panel · Initial screening</div>
+    <h1 id="boardTitle"></h1>
+    <ul class="prompt" id="boardPrompt"></ul>
+  </header>
+
+  <div id="notice" class="notice" hidden></div>
+
+  <form class="composer" id="composer" hidden>
+    <label for="newPoint" class="eyebrow">Add a question</label>
+    <textarea id="newPoint" rows="2" maxlength="400" placeholder="One question per entry, worded the way you'd ask the candidate."></textarea>
+    <div class="composer-row">
+      <div class="name-row">
+        <label for="myName" class="count">Your name</label>
+        <input type="text" id="myName" maxlength="60" placeholder="Optional" autocomplete="name">
+      </div>
+      <span class="count" id="charCount">0 / 400</span>
+      <button class="btn" type="submit" id="addBtn" disabled>Add question</button>
+    </div>
+  </form>
+
+  <div class="bar">
+    <div class="tabs" role="group" aria-label="Sort questions">
+      <button class="tab" data-sort="top" aria-pressed="true">Top</button>
+      <button class="tab" data-sort="new" aria-pressed="false">Newest</button>
+      <button class="tab" data-sort="split" aria-pressed="false">Most divided</button>
+    </div>
+    <span class="stats" id="stats"></span>
+  </div>
+
+  <ol class="list" id="list"></ol>
+  <div class="empty" id="empty">
+    <strong>Loading questions…</strong>
+    Questions the panel adds will show up here, ranked by votes.
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module">
+// ─── 1. Paste your Firebase web config here (Project settings → Your apps → Web app) ───
+const firebaseConfig = {
+  apiKey: "PASTE_API_KEY",
+  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
+  projectId: "PASTE_PROJECT_ID",
+  appId: "PASTE_APP_ID",
+};
+
+// ─── 2. Board text. Each line of PROMPT becomes one bullet. ───
+const TITLE = "Initial screening questions";
+const PROMPT = `Add your questions below.
+Feel free to edit any question to improve its wording.
+Vote up the ones we should keep and down the ones we should drop.`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc,
+  onSnapshot, serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const $ = (id) => document.getElementById(id);
+const UP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3l6 8H2z"/></svg>';
+const DOWN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13L2 5h12z"/></svg>';
+
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+let db = null, myId = null;
+let questions = [];   // [{id, text, authorUid, authorName, createdAt, edited, editedByName}]
+let allVotes = {};    // uid -> {qid: 1|-1}
+let sort = store.get("sb-sort", "top");
+let loaded = false;
+let voteChain = Promise.resolve();
+let editingId = null, editDraft = "";
+
+// Header
+document.title = TITLE;
+$("boardTitle").textContent = TITLE;
+for (const line of PROMPT.split("\n").map((l) => l.trim()).filter(Boolean)) {
+  const li = document.createElement("li"); li.textContent = line; $("boardPrompt").append(li);
+}
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2600);
+}
+function notice(msg) { const n = $("notice"); n.textContent = msg; n.hidden = !msg; }
+function myName() { return $("myName").value.trim().slice(0, 60); }
+
+function relTime(ms) {
+  if (!ms) return "";
+  const s = Math.max(1, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.round(s / 60); if (m < 60) return m + " min ago";
+  const h = Math.round(m / 60); if (h < 24) return h + " h ago";
+  const d = Math.round(h / 24); if (d < 30) return d + " d ago";
+  return new Date(ms).toLocaleDateString();
+}
+
+function tally() {
+  const t = {};
+  for (const q of questions) t[q.id] = { up: 0, down: 0 };
+  for (const uid in allVotes) {
+    const v = allVotes[uid] || {};
+    for (const qid in v) {
+      if (!t[qid]) continue;
+      if (v[qid] === 1) t[qid].up++; else if (v[qid] === -1) t[qid].down++;
+    }
+  }
+  return t;
+}
+
+function render(force) {
+  if (editingId && !force) return; // don't wipe an open edit box; re-render on save/cancel
+  const t = tally();
+  const mine = (myId && allVotes[myId]) || {};
+  const rows = questions.map((q) => {
+    const c = t[q.id] || { up: 0, down: 0 };
+    return { ...q, up: c.up, down: c.down, score: c.up - c.down };
+  });
+  if (sort === "top") rows.sort((a, b) => b.score - a.score || b.up - a.up || b.createdAt - a.createdAt);
+  else if (sort === "new") rows.sort((a, b) => b.createdAt - a.createdAt);
+  else rows.sort((a, b) => Math.min(b.up, b.down) - Math.min(a.up, a.down) || (b.up + b.down) - (a.up + a.down));
+
+  const voters = Object.keys(allVotes).filter((u) => Object.keys(allVotes[u] || {}).length).length;
+  $("stats").textContent = questions.length
+    ? `${questions.length} question${questions.length === 1 ? "" : "s"} · ${voters} voter${voters === 1 ? "" : "s"}`
+    : "";
+
+  const list = $("list"); list.textContent = "";
+  const empty = $("empty");
+  if (!rows.length) {
+    empty.hidden = false;
+    empty.innerHTML = loaded
+      ? "<strong>No questions yet</strong>Add the first one above. Everyone with the link will see it and can vote."
+      : "<strong>Loading questions…</strong>Questions the panel adds will show up here, ranked by votes.";
+    return;
+  }
+  empty.hidden = true;
+  const disabled = !myId;
+
+  for (const r of rows) {
+    const li = document.createElement("li"); li.className = "item";
+    const my = mine[r.id] || 0;
+
+    const rail = document.createElement("div"); rail.className = "rail";
+    const up = document.createElement("button");
+    up.className = "vote up"; up.innerHTML = UP; up.setAttribute("aria-pressed", my === 1);
+    up.setAttribute("aria-label", "Keep this question"); up.disabled = disabled;
+    up.onclick = () => castVote(r.id, my === 1 ? 0 : 1);
+    const sc = document.createElement("span");
+    sc.className = "score" + (r.score > 0 ? " pos" : r.score < 0 ? " neg" : "");
+    sc.textContent = r.score > 0 ? "+" + r.score : String(r.score);
+    const dn = document.createElement("button");
+    dn.className = "vote down"; dn.innerHTML = DOWN; dn.setAttribute("aria-pressed", my === -1);
+    dn.setAttribute("aria-label", "Drop this question"); dn.disabled = disabled;
+    dn.onclick = () => castVote(r.id, my === -1 ? 0 : -1);
+    rail.append(up, sc, dn);
+
+    const body = document.createElement("div"); body.className = "body";
+    let p;
+    if (editingId === r.id) {
+      p = document.createElement("div"); p.className = "edit-box";
+      const ta = document.createElement("textarea"); ta.id = "edit-" + r.id; ta.rows = 3; ta.maxLength = 400;
+      ta.value = editDraft; ta.setAttribute("aria-label", "Edit question");
+      ta.oninput = () => { editDraft = ta.value; };
+      ta.onkeydown = (e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(r.id); }
+        if (e.key === "Escape") cancelEdit();
+      };
+      const acts = document.createElement("div"); acts.className = "edit-actions";
+      const sv = document.createElement("button"); sv.className = "btn"; sv.textContent = "Save";
+      sv.onclick = () => saveEdit(r.id);
+      const cn = document.createElement("button"); cn.className = "btn ghost"; cn.textContent = "Cancel";
+      cn.onclick = cancelEdit;
+      acts.append(sv, cn); p.append(ta, acts);
+      setTimeout(() => { if (ta.isConnected) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 0);
+    } else {
+      p = document.createElement("p"); p.className = "text"; p.textContent = r.text;
+    }
+
+    const meta = document.createElement("div"); meta.className = "meta";
+    const tl = document.createElement("span"); tl.className = "tally";
+    tl.innerHTML = '<span class="u"></span> · <span class="d"></span>';
+    tl.querySelector(".u").textContent = r.up + " keep";
+    tl.querySelector(".d").textContent = r.down + " drop";
+    const who = document.createElement("span");
+    const nm = r.authorUid === myId ? "You" : (r.authorName || "Anonymous");
+    who.textContent = nm + (r.createdAt ? " · " + relTime(r.createdAt) : "");
+    meta.append(tl, who);
+    if (r.edited) {
+      const ed = document.createElement("span");
+      ed.textContent = r.editedByName ? "edited by " + r.editedByName : "edited";
+      meta.append(ed);
+    }
+    if (myId && editingId !== r.id) {
+      const eb = document.createElement("button"); eb.className = "del"; eb.textContent = "Edit";
+      eb.onclick = () => { editingId = r.id; editDraft = r.text; render(true); };
+      meta.append(eb);
+    }
+    if (myId && r.authorUid === myId) {
+      const del = document.createElement("button"); del.className = "del"; del.textContent = "Remove";
+      del.onclick = () => removeQuestion(r.id, del);
+      meta.append(del);
+    }
+    body.append(p, meta);
+    li.append(rail, body);
+    list.append(li);
+  }
+}
+
+function castVote(qid, value) {
+  if (!db || !myId) return;
+  voteChain = voteChain.then(async () => {
+    const next = { ...(allVotes[myId] || {}) };
+    if (value === 0) delete next[qid]; else next[qid] = value;
+    allVotes = { ...allVotes, [myId]: next };
+    render();
+    try { await setDoc(doc(db, "votes", myId), { v: next }); }
+    catch (e) { console.error(e); toast("Your vote wasn't saved. Check your connection and try again."); }
+  });
+}
+
+function cancelEdit() { editingId = null; editDraft = ""; render(true); }
+async function saveEdit(qid) {
+  const text = editDraft.trim();
+  const cur = questions.find((x) => x.id === qid);
+  if (!text) { toast("A question can't be empty."); return; }
+  if (!cur) { toast("That question was removed."); cancelEdit(); return; }
+  if (text === cur.text) { cancelEdit(); return; }
+  try {
+    await updateDoc(doc(db, "questions", qid), {
+      text, edited: true, editedByName: myName(), editedAt: serverTimestamp(),
+    });
+    toast("Question updated");
+    cancelEdit();
+  } catch (e) { console.error(e); toast("Your edit wasn't saved. The question may have been removed."); }
+}
+
+async function removeQuestion(qid, btn) {
+  if (btn.dataset.confirm !== "1") {
+    btn.dataset.confirm = "1"; btn.textContent = "Tap again to remove";
+    setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ""; btn.textContent = "Remove"; } }, 3000);
+    return;
+  }
+  try { await deleteDoc(doc(db, "questions", qid)); toast("Question removed"); }
+  catch (e) { console.error(e); toast("Couldn't remove that question."); }
+}
+
+// Composer
+const input = $("newPoint");
+$("myName").value = store.get("sb-name", "");
+$("myName").addEventListener("change", () => store.set("sb-name", myName()));
+input.addEventListener("input", () => {
+  $("charCount").textContent = input.value.length + " / 400";
+  $("addBtn").disabled = !input.value.trim();
+});
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $("composer").requestSubmit(); }
+});
+$("composer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text || !db || !myId) return;
+  if (questions.some((q) => q.text.toLowerCase() === text.toLowerCase())) {
+    toast("That question is already on the list. Vote on it instead."); return;
+  }
+  store.set("sb-name", myName());
+  $("addBtn").disabled = true;
+  try {
+    await addDoc(collection(db, "questions"), {
+      text, authorUid: myId, authorName: myName(), createdAt: serverTimestamp(),
+    });
+    input.value = ""; $("charCount").textContent = "0 / 400";
+    toast("Question added");
+  } catch (err) {
+    console.error(err);
+    $("addBtn").disabled = false;
+    toast("Your question wasn't saved. Check your connection and try again.");
+  }
+});
+
+// Sorting
+document.querySelectorAll(".tab").forEach((b) => {
+  b.setAttribute("aria-pressed", b.dataset.sort === sort);
+  b.onclick = () => {
+    sort = b.dataset.sort; store.set("sb-sort", sort);
+    document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    render();
+  };
+});
+
+// Start
+render();
+if (firebaseConfig.apiKey.startsWith("PASTE")) {
+  loaded = true; render();
+  notice("This board isn't connected yet. Paste your Firebase config at the top of the script in index.html.");
+} else {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  const auth = getAuth(app);
+
+  onSnapshot(collection(db, "questions"), (snap) => {
+    questions = snap.docs.map((d) => {
+      const x = d.data({ serverTimestamps: "estimate" }) || {};
+      return {
+        id: d.id, text: String(x.text || ""), authorUid: x.authorUid || "",
+        authorName: String(x.authorName || ""),
+        createdAt: x.createdAt && x.createdAt.toMillis ? x.createdAt.toMillis() : 0,
+        edited: !!x.edited, editedByName: String(x.editedByName || ""),
+      };
+    }).filter((q) => q.text);
+    if (editingId && !questions.some((q) => q.id === editingId)) { editingId = null; toast("The question you were editing was removed."); }
+    loaded = true; render();
+  }, (e) => { console.error(e); loaded = true; render(); notice("Couldn't load questions. Reload the page to try again."); });
+
+  onSnapshot(collection(db, "votes"), (snap) => {
+    const next = {};
+    for (const d of snap.docs) { const x = d.data() || {}; next[d.id] = (x.v && typeof x.v === "object") ? x.v : {}; }
+    allVotes = next; render();
+  }, (e) => console.error(e));
+
+  onAuthStateChanged(auth, (u) => {
+    myId = u ? u.uid : null;
+    $("composer").hidden = !myId;
+    render();
+  });
+  signInAnonymously(auth).catch((e) => {
+    console.error(e);
+    notice("Couldn't connect you to the board, so you can read but not add or vote. Reload to try again.");
+  });
+}
+
+setInterval(() => { if (questions.length) render(); }, 60000);
+
+</script>
+</body>
+</html>

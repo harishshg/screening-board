@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Anyone with the link can read. Writers must be signed in anonymously (the page
+// does this automatically, no account needed). Each browser gets its own id, so
+// one person = one vote per question per browser.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function validText(t) {
+      return t is string && t.size() > 0 && t.size() <= 400;
+    }
+    function validName(n) {
+      return n is string && n.size() <= 60;
+    }
+
+    match /questions/{qid} {
+      allow read: if true;
+
+      // Add a question: you can only add it under your own id, with a server timestamp.
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['text', 'authorUid', 'authorName', 'createdAt'])
+        && validText(request.resource.data.text)
+        && validName(request.resource.data.authorName)
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+
+      // Edit any question's wording. Author and creation time can't be changed.
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['text', 'edited', 'editedByName', 'editedAt'])
+        && validText(request.resource.data.text)
+        && request.resource.data.edited == true
+        && validName(request.resource.data.editedByName)
+        && request.resource.data.editedAt == request.time;
+
+      // Only the person who added a question can remove it.
+      // (You can remove anything from the Firebase console.)
+      allow delete: if request.auth != null
+        && resource.data.authorUid == request.auth.uid;
+    }
+
+    // One document per voter: votes/{uid} = { v: { questionId: 1 | -1 } }
+    match /votes/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['v'])
+        && request.resource.data.v is map
+        && request.resource.data.v.size() <= 500;
+    }
+  }
+}
