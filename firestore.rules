@@ -39,6 +39,21 @@ service cloud.firestore {
         && resource.data.authorUid == request.auth.uid;
     }
 
+    // Discussion messages. Anyone signed in can post under their own id; only the author can remove.
+    match /messages/{mid} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['text', 'authorUid', 'authorName', 'createdAt'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500
+        && validName(request.resource.data.authorName)
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow delete: if request.auth != null
+        && resource.data.authorUid == request.auth.uid;
+    }
+
     // One document per voter: votes/{uid} = { v: { questionId: 1 | -1 } }
     match /votes/{uid} {
       allow read: if true;

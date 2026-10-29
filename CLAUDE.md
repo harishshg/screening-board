@@ -12,6 +12,7 @@ A single-page web app where interview panelists add initial-screening questions,
 
 ## Data model
 - `questions/{id}`: `text` (1–400 chars), `authorUid`, `authorName` (≤60, optional), `createdAt` (server timestamp); after an edit also `edited: true`, `editedByName`, `editedAt` (server timestamp).
+- `messages/{id}`: Discussion chat below the list. `text` (1–500 chars), `authorUid`, `authorName` (≤60, optional), `createdAt` (server timestamp). Only the author can delete; the page shows the latest 300. Rendered by `renderChat()`, separate from `render()`.
 - `votes/{uid}`: `{ v: { <questionId>: 1 | -1 } }`, one doc per anonymous user, written only by that user. Tallies are computed client-side from the whole `votes` collection.
 
 ## Auth and permissions

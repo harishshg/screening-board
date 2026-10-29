@@ -146,6 +146,24 @@ ol.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction
 .name-row { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; }
 .name-row input { max-width: 220px; padding: 7px 10px; font-size: 14px; }
 .composer-row .count:not(label) { margin-left: auto; }
+/* Discussion: free-form chat below the question list, oldest at top */
+.chat { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.chat h2 { font-family: var(--font-display); font-weight: 700; font-size: 20px; margin: 0; }
+.chat-box { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.chat-log {
+  list-style: none; margin: 0; padding: 12px 14px; max-height: 420px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.chat-empty { color: var(--muted); font-size: 14px; text-align: center; padding: 16px 0; }
+.msg { display: flex; flex-direction: column; gap: 2px; }
+.msg-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 12.5px; color: var(--muted); }
+.msg-head strong { color: var(--ink); font-weight: 600; font-size: 13.5px; }
+.msg.mine .msg-head strong { color: var(--accent); }
+.msg-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-form { border-top: 1px solid var(--line); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.chat-form-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.chat-as { font-size: 12.5px; color: var(--muted); }
+.chat-form-row .btn { margin-left: auto; }
 </style>
 </head>
 <body>
@@ -185,6 +203,22 @@ ol.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction
     <strong>Loading questions…</strong>
     Questions the panel adds will show up here, ranked by votes.
   </div>
+
+  <section class="chat" aria-labelledby="chatTitle">
+    <h2 id="chatTitle">Discussion</h2>
+    <p class="prompt">Share thoughts on the questions, the screening round, or anything else.</p>
+    <div class="chat-box">
+      <ol class="chat-log" id="chatLog" aria-live="polite"></ol>
+      <form class="chat-form" id="chatForm" hidden>
+        <label for="chatInput" class="eyebrow">Your message</label>
+        <textarea id="chatInput" rows="2" maxlength="500" placeholder="Write a message. Enter sends, Shift+Enter for a new line."></textarea>
+        <div class="chat-form-row">
+          <span class="chat-as" id="chatAs"></span>
+          <button class="btn" type="submit" id="chatSend" disabled>Send</button>
+        </div>
+      </form>
+    </div>
+  </section>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -208,7 +242,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc,
-  onSnapshot, serverTimestamp,
+  onSnapshot, serverTimestamp, query, orderBy, limitToLast,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
@@ -227,6 +261,8 @@ let sort = store.get("sb-sort", "top");
 let loaded = false;
 let voteChain = Promise.resolve();
 let editingId = null, editDraft = "";
+let messages = [];    // [{id, text, authorUid, authorName, createdAt}], oldest first
+let chatLoaded = false;
 
 // Header
 document.title = TITLE;
@@ -402,10 +438,82 @@ async function removeQuestion(qid, btn) {
   catch (e) { console.error(e); toast("Couldn't remove that question."); }
 }
 
+// Discussion. Rendered separately from render() so an open question edit doesn't freeze the chat.
+function renderChat() {
+  const log = $("chatLog");
+  const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+  log.textContent = "";
+  if (!messages.length) {
+    const li = document.createElement("li"); li.className = "chat-empty";
+    li.textContent = chatLoaded ? "No messages yet. Start the conversation." : "Loading messages…";
+    log.append(li);
+    return;
+  }
+  for (const m of messages) {
+    const li = document.createElement("li");
+    li.className = "msg" + (m.authorUid === myId ? " mine" : "");
+    const head = document.createElement("div"); head.className = "msg-head";
+    const nm = document.createElement("strong");
+    nm.textContent = m.authorUid === myId ? "You" : (m.authorName || "Anonymous");
+    const when = document.createElement("span"); when.textContent = relTime(m.createdAt);
+    head.append(nm, when);
+    if (myId && m.authorUid === myId) {
+      const del = document.createElement("button"); del.className = "del"; del.textContent = "Remove";
+      del.onclick = () => removeMessage(m.id, del);
+      head.append(del);
+    }
+    const p = document.createElement("p"); p.className = "msg-text"; p.textContent = m.text;
+    li.append(head, p);
+    log.append(li);
+  }
+  if (nearBottom || !renderChat._scrolled) { log.scrollTop = log.scrollHeight; renderChat._scrolled = true; }
+}
+
+function updateChatAs() {
+  const n = myName();
+  $("chatAs").textContent = n ? "Posting as " + n : "Posting as Anonymous. Add your name above.";
+}
+
+async function removeMessage(mid, btn) {
+  if (btn.dataset.confirm !== "1") {
+    btn.dataset.confirm = "1"; btn.textContent = "Tap again to remove";
+    setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ""; btn.textContent = "Remove"; } }, 3000);
+    return;
+  }
+  try { await deleteDoc(doc(db, "messages", mid)); }
+  catch (e) { console.error(e); toast("Couldn't remove that message."); }
+}
+
+const chatInput = $("chatInput");
+chatInput.addEventListener("input", () => { $("chatSend").disabled = !chatInput.value.trim(); });
+chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("chatForm").requestSubmit(); }
+});
+$("chatForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = chatInput.value.trim();
+  if (!text || !db || !myId) return;
+  store.set("sb-name", myName());
+  $("chatSend").disabled = true;
+  try {
+    await addDoc(collection(db, "messages"), {
+      text, authorUid: myId, authorName: myName(), createdAt: serverTimestamp(),
+    });
+    chatInput.value = "";
+    $("chatLog").scrollTop = $("chatLog").scrollHeight;
+  } catch (err) {
+    console.error(err);
+    $("chatSend").disabled = false;
+    toast("Your message wasn't sent. Check your connection and try again.");
+  }
+});
+
 // Composer
 const input = $("newPoint");
 $("myName").value = store.get("sb-name", "");
 $("myName").addEventListener("change", () => store.set("sb-name", myName()));
+$("myName").addEventListener("input", updateChatAs);
+updateChatAs();
 input.addEventListener("input", () => {
   $("charCount").textContent = input.value.length + " / 400";
   $("addBtn").disabled = !input.value.trim();
@@ -446,9 +554,10 @@ document.querySelectorAll(".tab").forEach((b) => {
 });
 
 // Start
-render();
+render(); renderChat();
 if (firebaseConfig.apiKey.startsWith("PASTE")) {
   loaded = true; render();
+  chatLoaded = true; renderChat();
   notice("This board isn't connected yet. Paste your Firebase config at the top of the script in index.html.");
 } else {
   const app = initializeApp(firebaseConfig);
@@ -475,10 +584,23 @@ if (firebaseConfig.apiKey.startsWith("PASTE")) {
     allVotes = next; render();
   }, (e) => console.error(e));
 
+  onSnapshot(query(collection(db, "messages"), orderBy("createdAt"), limitToLast(300)), (snap) => {
+    messages = snap.docs.map((d) => {
+      const x = d.data({ serverTimestamps: "estimate" }) || {};
+      return {
+        id: d.id, text: String(x.text || ""), authorUid: x.authorUid || "",
+        authorName: String(x.authorName || ""),
+        createdAt: x.createdAt && x.createdAt.toMillis ? x.createdAt.toMillis() : 0,
+      };
+    }).filter((m) => m.text);
+    chatLoaded = true; renderChat();
+  }, (e) => { console.error(e); chatLoaded = true; renderChat(); });
+
   onAuthStateChanged(auth, (u) => {
     myId = u ? u.uid : null;
     $("composer").hidden = !myId;
-    render();
+    $("chatForm").hidden = !myId;
+    render(); renderChat();
   });
   signInAnonymously(auth).catch((e) => {
     console.error(e);
@@ -486,7 +608,7 @@ if (firebaseConfig.apiKey.startsWith("PASTE")) {
   });
 }
 
-setInterval(() => { if (questions.length) render(); }, 60000);
+setInterval(() => { if (questions.length) render(); if (messages.length) renderChat(); }, 60000);
 
 </script>
 </body>
