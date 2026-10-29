@@ -6,7 +6,8 @@ A single-page web app where interview panelists add initial-screening questions,
 - `index.html`: the whole app. Inline CSS, then markup, then one `<script type="module">`.
   - Top of the script: `firebaseConfig` (paste from Firebase console) and the board text `TITLE` / `PROMPT` (each PROMPT line is one bullet).
   - Firebase JS SDK v10.12.2 loaded as ES modules from `www.gstatic.com`. No build step, no npm.
-- `firestore.rules`: Firestore security rules. Must be pasted into Firebase console → Firestore → Rules (or deployed with the Firebase CLI) whenever changed. Keep them in sync with the fields the app writes.
+- `firestore.rules`: Firestore security rules. Deploy whenever changed with `firebase deploy --only firestore:rules` (or paste into Firebase console → Firestore → Rules). Keep them in sync with the fields the app writes.
+- `firebase.json` / `.firebaserc`: Firebase CLI config; the project is `screening-board-hs98`.
 - `README.md`: setup and deploy steps for humans.
 
 ## Data model
